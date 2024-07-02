@@ -12,18 +12,11 @@ DB_NAME = 'vacancies'
 DB_USER = 'postgres'
 DB_PASSWORD = 'ahb837js'
 
-keywords = 'python разработчик'
-
 headers = {
     'Authorization': f'Bearer {access_token}',
 }
 
-# Пример запроса к API для получения информации о вакансиях
 base_url = 'https://api.hh.ru/vacancies'
-params = {
-    'text': keywords,
-    'per_page': 100,
-}
 
 def connect_to_db():
     try:

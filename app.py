@@ -3,7 +3,7 @@ import psycopg2
 import time
 import random
 import json
-from flask import Flask, render_template
+from flask import Flask, render_template, request, redirect, url_for
 
 access_token = 'USERSVJ0RLO8S59VV02DNJ4BHAR2SH5GIIL07LQ077ITDOHROFDL0JILTG1M12VI'
 
@@ -18,6 +18,8 @@ headers = {
 
 base_url = 'https://api.hh.ru/vacancies'
 
+app = Flask(__name__)
+
 def connect_to_db():
     try:
         conn = psycopg2.connect(
@@ -31,31 +33,9 @@ def connect_to_db():
         print(f"Ошибка подключения к PostgreSQL: {e}")
         return None
 
-def get_regions():
-    regions_url = 'https://api.hh.ru/areas'
+def create_vacancies_table(conn):
     try:
-        response = requests.get(regions_url, headers=headers)
-        if response.status_code == 200:
-            data = response.json()
-            # Ищем регион с именем 'Россия' и возвращаем его id
-            for area in data:
-                if area['name'] == 'Россия':
-                    return [area['id']]
-            print("Регион 'Россия' не найден в API HH.ru")
-            return []
-        else:
-            print(f"Ошибка при получении списка регионов: {response.status_code}")
-            return []
-    except Exception as e:
-        print(f"Ошибка при запросе к API: {e}")
-        return []
-
-def parse_and_save_vacancies():
-    conn = connect_to_db()
-    if conn:
         cursor = conn.cursor()
-
-        # Создание таблицы для хранения вакансий 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS vacancies (
                 id SERIAL PRIMARY KEY,
@@ -63,88 +43,126 @@ def parse_and_save_vacancies():
                 company VARCHAR(255) NOT NULL,
                 salary TEXT,
                 url TEXT,
-                region_id INTEGER
-            );
+                area_id INTEGER,
+                area_name VARCHAR(255),
+                published_at TIMESTAMP WITHOUT TIME ZONE,
+                created_at TIMESTAMP WITHOUT TIME ZONE,
+                apply_alternate_url TEXT,
+                alternate_url TEXT,
+                schedule_name VARCHAR(255),
+                employment_name VARCHAR(255)
+            )
         """)
-        regions = get_regions()
+        conn.commit()
+        print("Таблица vacancies создана успешно или уже существует.")
+    except Exception as e:
+        print(f"Ошибка при создании таблицы vacancies: {e}")
 
-        for region_id in regions:
-            params = {'area': region_id, 'page': 0}
-            while True:
-                try:
-                    response = requests.get(base_url, headers=headers, params=params)
-                    if response.status_code == 200:
-                        data = response.json()
-                        if 'items' in data:
-                            vacancies = data['items']
-                            for vacancy in vacancies:
-                                name = vacancy['name']
-                                company = vacancy['employer']['name']
-                                salary = vacancy.get('salary')
-                                url = vacancy['alternate_url']
-                                if salary:
-                                    salary_text = f"{salary['from']} - {salary['to']} {salary['currency']}"
-                                else:
-                                    salary_text = None
+def parse_vacancies_by_keyword(keyword, conn):
+    try:
+        cursor = conn.cursor()
+        # Очистка таблицы перед вставкой новых данных
+        cursor.execute("TRUNCATE TABLE vacancies")
+        conn.commit()
 
-                                cursor.execute(
-                                    """
-                                    INSERT INTO vacancies (name, company, salary, url, region_id) 
-                                    VALUES (%s, %s, %s, %s, %s);
-                                    """,
-                                    (name, company, salary_text, url, region_id)
-                                )
-                            conn.commit()
+        parsed_vacancies = []  # Список для хранения распарсенных вакансий
+        total_pages = 100  # Нам нужно 100 страниц
+        vacancies_per_page = 20
 
-
-                        # Проверка на наличие следующей страницы
-                            if params['page'] < data['pages'] - 1:
-                                params['page'] += 1
-                            else:
-                                break  # Выход из цикла, если страница последняя
+        for page in range(total_pages):
+            params = {'text': keyword, 'page': page, 'per_page': vacancies_per_page}
+            response = requests.get(base_url, headers=headers, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                if 'items' in data:
+                    vacancies = data['items']
+                    for vacancy in vacancies:
+                        name = vacancy['name']
+                        company = vacancy['employer']['name']
+                        salary = vacancy.get('salary')
+                        url = vacancy['alternate_url']
+                        area = vacancy.get('area')
+                        if area:
+                            area_id = area.get('id')
+                            area_name = area.get('name')
                         else:
-                            print("В ответе API нет данных о вакансиях")
-                            break
-                    elif response.status_code == 429:  # Обработка ошибки "слишком много запросов"
-                        print(f"Ошибка при запросе к API: {response.status_code}, слишком много запросов. Ожидание 10 секунд...")
-                        time.sleep(10)
-                    else:
-                        print(f"Ошибка при запросе к API: {response.status_code}")
-                        break
-                except Exception as e:
-                    print(f"Ошибка при запросе к API: {e}")
-                    break
-                time.sleep(random.uniform(1,3))  # Пауза между запросами в пределах 1-3 секунд
+                            area_id = None
+                            area_name = None
+                        if salary:
+                            salary_text = f"{salary['from']} - {salary['to']} {salary['currency']}"
+                        else:
+                            salary_text = None
 
-            # Сохранение изменений в базе данных
-            conn.commit()
+                        published_at = vacancy.get('published_at')
+                        created_at = vacancy.get('created_at')
+                        apply_alternate_url = vacancy.get('apply_alternate_url')
+                        alternate_url = vacancy.get('alternate_url')
+                        schedule = vacancy.get('schedule')
+                        employment = vacancy.get('employment')
+                        schedule_name = schedule.get('name') if schedule else None
+                        employment_name = employment.get('name') if employment else None
 
-        # Закрытие курсора и соединения
-        cursor.close()
-        conn.close()
-def delete_table():
-    """Удаляет таблицу vacancies из базы данных."""
+                        cursor.execute(
+                            """
+                            INSERT INTO vacancies (
+                                name, company, salary, url, area_id, area_name, 
+                                published_at, created_at, apply_alternate_url, 
+                                alternate_url, schedule_name, employment_name
+                            ) 
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                            """,
+                            (
+                                name, company, salary_text, url, area_id, area_name, 
+                                published_at, created_at, apply_alternate_url, 
+                                alternate_url, schedule_name, employment_name
+                            )
+                        )
+                        conn.commit()
+                        parsed_vacancies.append({
+                            "name": name,
+                            "company": company,
+                            "salary": salary_text,
+                            "url": url,
+                            "area_id": area_id,
+                            "area_name": area_name,
+                            "published_at": published_at,
+                            "created_at": created_at,
+                            "apply_alternate_url": apply_alternate_url,
+                            "alternate_url": alternate_url,
+                            "schedule_name": schedule_name,
+                            "employment_name": employment_name
+                        })
+            else:
+                print(f"Ошибка при запросе к API: {response.status_code} - {response.text}")
+                break
+
+        print(f"Вакансии '{keyword}' успешно сохранены в базу данных.")
+        return parsed_vacancies
+    except Exception as e:
+        print(f"Ошибка при сохранении вакансии: {e}")
+        return []
+
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/results', methods=['POST'])
+def results():
     conn = connect_to_db()
     if conn:
-        cursor = conn.cursor()
-        try:
-            cursor.execute("DROP TABLE IF EXISTS vacancies")
-            conn.commit()
-            print("Таблица vacancies удалена")
-        except Exception as e:
-            print(f"Ошибка при удалении таблицы: {e}")
-        finally:
-            cursor.close()
-            conn.close()
+        create_vacancies_table(conn)
+        keyword = request.form['keyword']
+        parsed_vacancies = parse_vacancies_by_keyword(keyword, conn)
+        if parsed_vacancies:
+            return render_template('results.html', vacancies=parsed_vacancies, keyword=keyword)
+        else:
+            return render_template('results.html', keyword=keyword, error_message=f"Вакансии '{keyword}' не найдены.")
+    else:
+        return render_template('results.html', error_message="Ошибка подключения к базе данных.")
 
-
-if __name__ == '__main__':
-    try:
-        parse_and_save_vacancies()
-    except Exception as e:
-        print(f"Ошибка во время парсинга: {e}")
-        delete_table() # Удаляем таблицу в случае ошибки
-
+if __name__ == "__main__":
+    app.run(debug=True)
 
 
 
@@ -165,12 +183,3 @@ if __name__ == '__main__':
 # response = requests.post(token_url, data=data)
 # token_info = response.json()
 # print(token_info)
-
-app = Flask(__name__)
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-if __name__ == '__main__':
-    app.run(debug=True)

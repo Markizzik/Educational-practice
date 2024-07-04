@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+   <html>
+   <head>
+       <title>Результаты поиска</title>
+   </head>
+   <body>
+       <h1>Результаты поиска по ключевому слову "{{ keyword }}"</h1>
+       {% if error_message %}
+           <p style="color: red;">{{ error_message }}</p>
+       {% endif %}
+       {% if vacancies %}
+           <h2>Найденные вакансии:</h2>
+           <ul>
+               {% for vacancy in vacancies %}
+                   <li>
+                       <h3><a href="{{ vacancy.url }}">{{ vacancy.name }}</a></h3>
+                       <p>Компания: {{ vacancy.company }}</p>
+                       <p>Зарплата: {{ vacancy.salary }}</p>
+                       <p>Город: {{ vacancy.area_name }}</p>
+                       <p>Опубликована: {{ vacancy.published_at }}</p>
+                       <p>Создана: {{ vacancy.created_at }}</p>
+                       <p>Ссылка на отклик: {{ vacancy.apply_alternate_url }}</p>
+                       <p>Ссылка на вакансию: {{ vacancy.alternate_url }}</p>
+                       <p>График работы: {{ vacancy.schedule_name }}</p>
+                       <p>Тип занятости: {{ vacancy.employment_name }}</p>
+                   </li>
+               {% endfor %}
+           </ul>
+       {% endif %}
+   </body>
+   </html>

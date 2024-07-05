@@ -7,10 +7,11 @@ from flask import Flask, render_template, request, jsonify
 
 access_token = 'USERSVJ0RLO8S59VV02DNJ4BHAR2SH5GIIL07LQ077ITDOHROFDL0JILTG1M12VI'
 
-DB_HOST = 'localhost'
+DB_HOST = 'db'
 DB_NAME = 'vacancies'
 DB_USER = 'postgres'
 DB_PASSWORD = 'ahb837js'
+DB_PORT = '5432'
 
 headers = {
     'Authorization': f'Bearer {access_token}',
@@ -26,7 +27,8 @@ def connect_to_db():
             host=DB_HOST,
             database=DB_NAME,
             user=DB_USER,
-            password=DB_PASSWORD
+            password=DB_PASSWORD,
+            port =DB_PORT
         )
         return conn
     except Exception as e:
@@ -61,12 +63,11 @@ def create_vacancies_table(conn):
 def parse_vacancies_by_keyword(keyword, conn):
     try:
         cursor = conn.cursor()
-        # Очистка таблицы перед вставкой новых данных
         cursor.execute("TRUNCATE TABLE vacancies")
         conn.commit()
 
-        parsed_vacancies = []  # Список для хранения распарсенных вакансий
-        total_pages = 100  # Нам нужно 100 страниц
+        parsed_vacancies = []  
+        total_pages = 100  
         vacancies_per_page = 20
 
         for page in range(total_pages):
@@ -186,7 +187,6 @@ def filter_results():
         cursor.execute(query, params)
         vacancies = cursor.fetchall()
 
-        # Преобразование данных в HTML
         html = ''
         if vacancies:
             html = "<h2>Найденные вакансии:</h2><ul>"
@@ -227,12 +227,10 @@ def results():
         salary_from = request.form.get('salary_from')
         salary_to = request.form.get('salary_to')
 
-        # Получение уникальных значений для графика работы и типа занятости
         schedule_names = set(v['schedule_name'] for v in parsed_vacancies if v['schedule_name'] is not None)
         employment_names = set(v['employment_name'] for v in parsed_vacancies if v['employment_name'] is not None)
 
         if parsed_vacancies:
-            # Фильтрация вакансий
             filtered_vacancies = []
             for vacancy in parsed_vacancies:
                 if (

@@ -3,7 +3,7 @@ import psycopg2
 import time
 import random
 import json
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, jsonify
 
 access_token = 'USERSVJ0RLO8S59VV02DNJ4BHAR2SH5GIIL07LQ077ITDOHROFDL0JILTG1M12VI'
 
@@ -147,15 +147,104 @@ def parse_vacancies_by_keyword(keyword, conn):
 def index():
     return render_template('index.html')
 
-@app.route('/results', methods=['POST'])
+@app.route('/filter_results', methods=['POST'])
+def filter_results():
+    conn = connect_to_db()
+    if conn:
+        create_vacancies_table(conn)
+        keyword = request.form.get('keyword')
+        city = request.form.get('city')
+        schedule = request.form.get('schedule')
+        employment = request.form.get('employment')
+        salary_from = request.form.get('salary_from')
+        salary_to = request.form.get('salary_to')
+
+        cursor = conn.cursor()
+        query = "SELECT * FROM vacancies WHERE name LIKE %s"
+        params = [f"%{keyword}%"]
+
+        if city:
+            query += " AND area_name = %s"
+            params.append(city)
+
+        if schedule:
+            query += " AND schedule_name = %s"
+            params.append(schedule)
+
+        if employment:
+            query += " AND employment_name = %s"
+            params.append(employment)
+
+        if salary_from:
+            query += " AND salary >= %s"
+            params.append(salary_from)
+
+        if salary_to:
+            query += " AND salary <= %s"
+            params.append(salary_to)
+
+        cursor.execute(query, params)
+        vacancies = cursor.fetchall()
+
+        # Преобразование данных в HTML
+        html = ''
+        if vacancies:
+            html = "<h2>Найденные вакансии:</h2><ul>"
+            for vacancy in vacancies:
+                html += f"""
+                    <li>
+                        <h3><a href="{vacancy[4]}">{vacancy[1]}</a></h3>
+                        <p>Компания: {vacancy[2]}</p>
+                        <p>Зарплата: {vacancy[3]}</p>
+                        <p>Город: {vacancy[6]}</p>
+                        <p>Опубликована: {vacancy[7]}</p>
+                        <p>Создана: {vacancy[8]}</p>
+                        <p>Ссылка на отклик: {vacancy[9]}</p>
+                        <p>Ссылка на вакансию: {vacancy[10]}</p>
+                        <p>График работы: {vacancy[11]}</p>
+                        <p>Тип занятости: {vacancy[12]}</p>
+                    </li>
+                """
+            html += "</ul>"
+        else:
+            html = "<p>Вакансии не найдены.</p>"
+
+        return html
+    else:
+        return "Ошибка подключения к базе данных."
+
+@app.route('/results', methods=['POST', 'GET'])
 def results():
     conn = connect_to_db()
     if conn:
         create_vacancies_table(conn)
-        keyword = request.form['keyword']
+        keyword = request.form.get('keyword') or request.args.get('keyword')
         parsed_vacancies = parse_vacancies_by_keyword(keyword, conn)
+
+        city = request.form.get('city')
+        schedule = request.form.get('schedule')
+        employment = request.form.get('employment')
+        salary_from = request.form.get('salary_from')
+        salary_to = request.form.get('salary_to')
+
+        # Получение уникальных значений для графика работы и типа занятости
+        schedule_names = set(v['schedule_name'] for v in parsed_vacancies if v['schedule_name'] is not None)
+        employment_names = set(v['employment_name'] for v in parsed_vacancies if v['employment_name'] is not None)
+
         if parsed_vacancies:
-            return render_template('results.html', vacancies=parsed_vacancies, keyword=keyword)
+            # Фильтрация вакансий
+            filtered_vacancies = []
+            for vacancy in parsed_vacancies:
+                if (
+                    (not city or vacancy['area_name'] == city) and
+                    (not schedule or vacancy['schedule_name'] == schedule) and
+                    (not employment or vacancy['employment_name'] == employment) and
+                    (not salary_from or salary_from == '' or (vacancy['salary'] and int(vacancy['salary'].split(' ')[0]) >= int(salary_from))) and
+                    (not salary_to or salary_to == '' or (vacancy['salary'] and int(vacancy['salary'].split(' ')[0]) <= int(salary_to)))
+                ):
+                    filtered_vacancies.append(vacancy)
+
+            return render_template('results.html', vacancies=filtered_vacancies, keyword=keyword, city=city, schedule=schedule, employment=employment, salary_from=salary_from, salary_to=salary_to, schedule_names=schedule_names, employment_names=employment_names)
         else:
             return render_template('results.html', keyword=keyword, error_message=f"Вакансии '{keyword}' не найдены.")
     else:

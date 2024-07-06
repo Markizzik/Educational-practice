@@ -5,12 +5,12 @@ import random
 import json
 from flask import Flask, render_template, request, jsonify
 
-access_token = 'USERSVJ0RLO8S59VV02DNJ4BHAR2SH5GIIL07LQ077ITDOHROFDL0JILTG1M12VI'
+access_token = '****'
 
 DB_HOST = 'db'
 DB_NAME = 'vacancies'
 DB_USER = 'postgres'
-DB_PASSWORD = 'ahb837js'
+DB_PASSWORD = '****'
 DB_PORT = '5432'
 
 headers = {
@@ -253,20 +253,3 @@ if __name__ == "__main__":
 
 
 
-# client_id = 'IFFP6QSBTAA1SS1HJ9UB8NAQUSNA8F9T883FSL28J1LFUGR760D66SKDI2DT9BNS'
-# client_secret = 'SRSHU9Q0CR4MK8742KN8FO9TNR3AOJISSMTNRTVHP6HNOFPNUP9BPRV3UUOBB0UJ'
-# authorization_code = 'P0JEE44SPVNGAUPTEKNBAMGNE1BT912HDRPRKJSNROFK9ROQG37V8TACRTB19IBV'
-# redirect_uri = 'http://127.0.0.1:5000'
-
-# token_url = 'https://hh.ru/oauth/token'
-# data = {
-#    'grant_type': 'authorization_code',
-#    'client_id': client_id,
-#    'client_secret': client_secret,
-#    'code': authorization_code,
-#    'redirect_uri': redirect_uri,
-# }
-
-# response = requests.post(token_url, data=data)
-# token_info = response.json()
-# print(token_info)

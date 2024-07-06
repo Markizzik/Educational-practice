@@ -138,7 +138,7 @@
             const resultsList = document.querySelector('ul');
 
             form.addEventListener('submit', function(event) {
-                event.preventDefault(); // Предотвращаем стандартную отправку формы
+                event.preventDefault();
 
                 const keyword = document.querySelector('input[name="keyword"]').value;
                 const city = document.querySelector('input[name="city"]').value;
@@ -147,13 +147,12 @@
                 const salaryFrom = document.querySelector('input[name="salary_from"]').value;
                 const salaryTo = document.querySelector('input[name="salary_to"]').value;
 
-                // Отправка AJAX-запроса
                 const xhr = new XMLHttpRequest();
                 xhr.open('POST', '/filter_results');
                 xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
                 xhr.onload = function() {
                     if (xhr.status >= 200 && xhr.status < 300) {
-                        resultsList.innerHTML = xhr.responseText; // Обновляем список результатов
+                        resultsList.innerHTML = xhr.responseText; 
                     } else {
                         console.error('Ошибка при запросе:', xhr.status, xhr.statusText);
                     }
